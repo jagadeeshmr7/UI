@@ -1,0 +1,259 @@
+
+<%
+  today = Time.now.strftime("%Y-%m-%d")
+  
+  hashDeviceClass = Hash.new(0)
+  hashOperatingSystem  = Hash.new(0)
+  hashDeviceType = Hash.new(0)
+
+
+  @deviceinfos.each do |devinfo|
+    
+    devinfo.devicetype = "Unknown" if (devinfo.devicetype.nil? || devinfo.devicetype.empty?)
+    devinfo.deviceclass = "Unknown" if (devinfo.deviceclass.nil? || devinfo.deviceclass.empty?)
+    devinfo.operatingsystem = "Unknown" if (devinfo.operatingsystem.nil? || devinfo.operatingsystem.empty?)
+
+    hashDeviceType[devinfo.devicetype] += 1
+    hashDeviceClass[devinfo.deviceclass] += 1
+    hashOperatingSystem[devinfo.operatingsystem] += 1
+  end
+  
+  #authDevices = @deviceinfos.select { |d| (!d["auth_source"].nil? && d["auth_source"] != 0)}
+%>
+
+<div id="content" class="span10">
+<!-- content starts -->
+   <div class="sortable row-fluid">
+      <!-- Summary counters - START -->
+      <a data-rel="tooltip" title="Total number of unique devices detected so far." 
+         class="well span3 top-block" href="/tbl_inventory">
+         <span class="icon32 icon-red icon-web"></span>
+	       <div>Total Devices</div>
+	       <div><%= @deviceinfos.count %></div>
+	       <span class="notification green">
+            <%= @deviceinfos.select{ |x| x.updated_at >= today }.count %>
+         </span>
+      </a>
+
+      <a data-rel="tooltip" title="Total number of unique users detected." 
+         class="well span3 top-block" href="/tbl_inventory">
+         <span class="icon32 icon-green icon-users"></span>
+	       <div>Total Users</div>
+	       <div><%= Deviceinfo.count(:username, :conditions => "username <> ''", :distinct => true) %></div>
+	       <span class="notification green">
+            <%= @deviceinfos.select{ |x| ((x.username != '') &&  (x.created_at >= today)) }.uniq{|x|x.username}.count %>
+         </span>
+      </a>
+
+      <a data-rel="tooltip" title="Internal/Corporate Servers to which the devices connected." 
+         class="well span3 top-block" href="/dash_bw">
+         <span class="icon32 icon-blue icon-briefcase-new"></span>
+	       <div>Assets</div>
+	       <div><%= Ipstat.select(:destip).uniq.length %></div>
+	       <span class="notification">0</span>
+      </a>
+				
+      <a data-rel="tooltip" title="Total Vulnerability/Intrusion alerts raised so far." 
+         class="well span3 top-block" href="/tbl_snort">
+	       <span class="icon32 icon-color icon-alert"></span>
+	       <div>Security Alerts</div>
+	       <div><%= (if !@snortAlertRecs.nil? then @snortAlertRecs.count else 0 end) + (if !@cveAlertRecs.nil? then @cveAlertRecs.count else 0 end) %></div>
+	       <span class="notification red">
+            <%= 
+               snortCountToday = cveCountToday = 0
+               snortCountToday = @snortAlertRecs.select{ |x| x.time >= today }.count if !@snortAlertRecs.nil? 
+               cveCountToday = @cveAlertRecs.select{|x| x.date >= today}.count if !@cveAlertRecs.nil?
+
+               snortCountToday +  cveCountToday          
+
+            %>
+         </span>
+      </a>
+
+      <!-- Summary counters - END -->
+
+   </div>
+
+
+   <div class="row-fluid sortable">		
+      <div class="box span4">
+         <%= render :partial => 'layouts/title_bar_icons',
+                    :locals => { :header_title => "Operating Systems",
+                                 :header_link  => "/tbl_inventory" }
+         %>
+         <div class="box-content">
+            <canvas id="devinfo_os_hbar">[No canvas support]</canvas>
+         </div> <!-- box-content -->
+      </div> <!-- box span4 -->
+
+      <div class="box span4">
+         <%= render :partial => 'layouts/title_bar_icons',
+                    :locals => { :header_title => "Device Types",
+                                 :header_link  => "/tbl_inventory" }
+         %>
+         <div class="box-content">
+            <canvas id="dev_type_pie" >[No canvas support]</canvas>
+         </div> <!-- box-content -->
+      </div> <!-- box span4 -->
+
+      <div class="box span4">
+         <%= render :partial => 'layouts/title_bar_icons',
+                    :locals => { :header_title => "Device Categories",
+                                 :header_link  => "/tbl_inventory" }
+         %>
+         <div class="box-content center ">
+	          <div class="sortable row-fluid" style="#position: absolute; overflow: hidden; vertical-align: center">
+	             <div class="well span4 top-block" >
+		              <div>Laptop</div>
+                  <%= link_to content_tag(:span, ''), {:action => "tbl_inventory", :column => "deviceclass", :value => "Desktop/Laptop"}, :class=>"icon-laptop icon-4x" %>
+		              <div><%= hashDeviceClass["Desktop/Laptop"] %> </div>
+               </div>
+	             <div class="well span4 top-block" >
+		              <div>Phone</div>
+                  <%= link_to content_tag(:span, ''), {:action => "tbl_inventory", :column => "deviceclass", :value => "MobileDevice"}, :class=>"icon-mobile-phone icon-4x" %>
+		              <div><%= hashDeviceClass["MobileDevice"] %> </div>
+               </div>
+            </div> <!-- sortable -->
+         </div> <!-- box-content -->
+      </div> <!-- box span4 -->
+      <div class="box span4">
+         <%= render :partial => 'layouts/title_bar_icons',
+                    :locals => { :header_title => "Unauthorized Devices",
+                                 :header_link  => "/tbl_inventory" }
+         %>
+         <div class="box-content">
+               <%= link_to "/tbl_inventory?column=auth_source&value=0" do %>
+               <canvas id="unauthGauge" class="well span4" style="height:50%;width: 100%; position:relative;">[No canvas support]</canvas>
+               <div id="gauge-textfield" style="font-size: 30px;position: absolute;margin-top:10px;margin-left:125px;"></div>
+               <% end %>
+         </div> <!-- box-content -->
+      </div> <!-- box span4 -->
+
+   </div><!-- row-fluid sortable -->
+</div><!-- content ends -->
+
+
+<script type="text/javascript">
+   function roundNumber(rnum, rlength) {
+     var newnumber = Math.round(rnum*Math.pow(10,rlength))/Math.pow(10,rlength);
+     return parseFloat(newnumber);
+   }
+
+
+   window.onload = function (){
+     var labels = <%=raw hashOperatingSystem.keys %>;
+     var data = <%=raw hashOperatingSystem.values %>;
+     var deviceTypeLabels = <%=raw hashDeviceType.keys %>;
+
+     //
+     var total = 0;
+     for (var i=0; i < data.length; i++) {
+       total += data[i];
+     }
+
+     function pieClicked(e, pie) {
+        var idx = pie['index'];
+        var label = labels[idx].split(' ', 1);
+        if (label == 'Unknown') label = '';
+        window.location.replace("/tbl_inventory?column=operatingsystem&value="+label);
+     }
+
+     function hbarClicked(e, hbar) {
+        var idx = hbar['index'];
+        var label = deviceTypeLabels[idx];
+        if (label == 'Unknown') label = '';
+        window.location.replace("/tbl_inventory?column=devicetype&value="+label);
+     }
+
+
+     //resize the canvas appropriately
+     document.body.onresize = function () {
+       var pieCanvas = document.getElementById('dev_type_pie');
+       pieCanvas.width = pieCanvas.parentNode.clientWidth;
+       pieCanvas.height = pieCanvas.parentNode.clientHeight * 2;
+
+       var hbarCanvas = document.getElementById('devinfo_os_hbar');
+       hbarCanvas.width = hbarCanvas.parentNode.clientWidth;
+       hbarCanvas.height = hbarCanvas.parentNode.clientHeight * 2;
+       
+     }
+
+     document.body.onresize();
+
+     var hbar = new RGraph.HBar('dev_type_pie', <%= hashDeviceType.values %>);
+     hbar.Set('labels.above', true);
+     hbar.Set('vmargin', 15); 
+     hbar.Set('labels', <%=raw hashDeviceType.keys %>);
+     hbar.Set('background.grid', false);
+     hbar.Set('strokestyle', 'rgba(0,0,0,0)'); 
+     hbar.Set('colors', ['#8B0000', '#FF8C00', '#00008B', '#7FFF00', '#9400D3', '#A52A2A', '#FF7300','#FFCD00','#00B869','#999','#A0D300','#EC0033']);
+     hbar.Set('colors.sequential', true);
+     hbar.Set('labels.above.decimals', 0);
+     hbar.Set('xlabels', false);
+     hbar.Set('noxaxis', true);
+     hbar.Set('noxtickmarks', true);
+     hbar.Set('noytickmarks', true); 
+     hbar.Set('gutter.left', (document.getElementById('devinfo_os_hbar').width * 0.3));
+     hbar.Set('events.click', hbarClicked);
+
+     if (!RGraph.isOld()) {
+        hbar.Set('tooltips', <%=raw hashDeviceType.keys %>);
+        hbar.Set('tooltips.event', 'onmousemove');
+
+        RGraph.Effects.HBar.Grow(hbar);
+     } else {
+        hbar.Draw();
+     } 
+
+
+     var pie = new RGraph.Pie('devinfo_os_hbar', data);
+     //pie.Set('colors', ['#8B0000', '#FF8C00', '#00008B', '#7FFF00', '#9400D3', '#A52A2A', '#FF7300','#FFCD00','#00B869','#999','#A0D300','#EC0033']);
+     pie.Set('colors', ['Gradient(lightskyblue:#EC0033)','Gradient(lightskyblue:#A0D300)','Gradient(lightskyblue:#FFCD00)','Gradient(lightskyblue:#00B869)','Gradient(lightskyblue:#999)','Gradient(lightskyblue:#FF7300)','Gradient(lightskyblue:#004CB0)']);
+     pie.Set('strokestyle', 'white');
+     pie.Set('linewidth', 3);
+     pie.Set('text.size', 6);
+     pie.Set('text.font', "Comic Sans");
+     pie.Set('exploded', 7);
+     pie.Set('shadow', false);
+     pie.Set('shadow.offsetx', 2);
+     pie.Set('shadow.offsety', 2);
+     pie.Set('shadow.blur', 3);
+     pie.Set('shadow.color', '#bbb');
+     pie.Set('labels.ingraph', true);
+     pie.Set('labels.position', 'gutter');
+     pie.Set('tooltips', labels);
+     pie.Set('tooltips.event', 'onmousemove');
+     pie.Set('events.click', pieClicked);
+
+     for (var i=0; i< labels.length; i++) {
+       labels[i] = labels[i] + ' ' + roundNumber(data[i]/total*100, 0) + '%';
+     }
+     pie.Set('labels.ingraph.specific', labels);
+     
+
+     RGraph.Effects.Pie.RoundRobin(pie);
+
+
+     var opts = {
+       lines: 20, // The number of lines to draw
+       angle: 0.15, // The length of each line
+       lineWidth: 0.44, // The line thickness
+       pointer: {
+          length: 0.61, // The radius of the inner circle
+          strokeWidth: 0.053, // The rotation offset
+          color: '#000000' // Fill color
+       },
+       colorStart: '#369BD7',   // Colors
+       colorStop: '#FF0000',    // just experiment with them
+       strokeColor: '#369BD7',   // to see which ones work best for you
+       generateGradient: true
+     };
+     var target = document.getElementById('unauthGauge'); // your canvas element
+     var gauge = new Gauge(target).setOptions(opts); // create sexy gauge!
+     gauge.setTextField(document.getElementById('gauge-textfield'));
+     gauge.maxValue = <%= @deviceinfos.count %>; // set max gauge value
+     gauge.animationSpeed = 32; // set animation speed (32 is default value)
+     gauge.set(<%=@deviceinfos.select { |d| (d["auth_source"].nil? || d["auth_source"] == 0)}.count %>); // set actual value
+
+   };
+</script>

@@ -1,0 +1,108 @@
+<div id="content" class="span10">
+<!-- content starts -->
+			
+   <div class="row-fluid sortable">		
+      <div class="box span12">
+         <%= render :partial => 'layouts/title_bar_icons',
+                    :locals => { :header_title => "Snort Alerts",
+                                 :header_link  => "#" }
+         %>
+         <div class="box-content">
+            <table id="dataTable" class="table table-striped table-bordered bootstrap-datatable">
+               <thead>
+	          <tr>
+	             <th>Snort ID</th>
+                <th>Time    </th>
+                <th>Message </th>
+		          <th>Priority</th>
+                <th>Protocol</th>
+                <th>Source</th>
+		          <th>Destination</th>
+	   	       <th>MAC (src) </th>
+                <th>MAC (dst) </th>
+	          </tr>
+	       </thead>  
+                  <tfoot>
+                                <tr>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+                            <th rowspan="1" colspan="1"></th>
+          </tr>
+         </tfoot> 
+	       <tbody>
+                  <% @snortAlertRecs.each do |rec| %>
+                     <tr>
+                        <td><%= link_to rec.sigid, "http://www.snortid.com/snortid.asp?QueryId=#{rec.sigid}", :target => "_blank" %></td>
+                        <td><%= rec.time %></td>
+                        <td><%= rec.message %></td>
+
+                        <% case rec['priority']
+                           when 1 %>
+                              <td><span class='label label-important'> High </span></td>
+                        <% when 2 %>
+                              <td><span class='label label-warning'> Medium </span></td>
+                        <% when 3 %>
+                              <td><span class='label label-success'> Low </span></td>
+                        <% when 4 %>
+                              <td><span class='label label-info'> Very Low </span></td>
+                        <% else %>
+                              <td><span class='label'><%=rec['priority'] %></span></td>
+                        <% end %>
+
+                        <td><%= rec.protocol %></td>
+                        <td><%= "#{rec.srcip}: #{rec.srcport}" %></td>
+                        <td><%= "#{rec.dstip}: #{rec.dstport}" %></td>
+                        <td><%= rec.srcmac %></td>
+                        <td><%= rec.dstmac %></td>
+                     </tr>
+                  <% end %>
+               </tbody>
+            </table>
+
+         </div> <!-- box-content -->
+      </div> <!-- box span12 -->
+   </div><!-- row-fluid sortable -->
+</div><!-- content ends -->
+
+<script type="text/javascript">
+//datatable
+$(document).ready(function() {
+  var oTable = $('#dataTable').dataTable({
+      "sDom": "<'row-fluid'<'span6'l><'span6'f>r>t<'row-fluid'<'span12'i><'span12 center'p>>",
+      "bJQueryUI": true,
+      "sPaginationType": "bootstrap",
+      "oLanguage": {
+      "sSearch": "Search all columns: ",
+      "sLengthMenu": "_MENU_ records per page"
+      }
+    } );
+
+/* Add a select menu for each TH element in the table footer */
+  $("tfoot th").each( function ( i ) {
+    switch(i)
+    {
+      case 0:
+      case 2:
+      case 3:
+        this.innerHTML = fnCreateSelect( oTable.fnGetColumnData(i, true) );
+        break;
+      case 1:
+        this.innerHTML = fnCreateSelect( oTable.fnGetColumnData(i, false, true) );
+        break;
+      default: 
+        this.innerHTML = fnCreateSelect( oTable.fnGetColumnData(i) );
+    }
+
+    $('select', this).change( function () {
+      oTable.fnFilter( $(this).val(), i );
+    } );
+  } );
+
+});
+</script>
